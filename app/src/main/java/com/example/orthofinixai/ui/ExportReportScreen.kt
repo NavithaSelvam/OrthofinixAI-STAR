@@ -1,6 +1,5 @@
 package com.example.orthofinixai.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,19 +11,28 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.orthofinixai.ui.theme.PrimaryGreen
 import com.example.orthofinixai.ui.theme.TextGray
+import com.example.orthofinixai.data.repository.CaseRepository
+import com.example.orthofinixai.util.PdfGenerator
+import com.example.orthofinixai.util.ReportExporter
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExportReportScreen(onBack: () -> Unit) {
+fun ExportReportScreen(caseId: String, onBack: () -> Unit) {
     var includePhotos by remember { mutableStateOf(true) }
     var includeGuidelines by remember { mutableStateOf(true) }
     var isGenerating by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val caseRepository = remember { CaseRepository(context) }
 
     Scaffold(
         topBar = {
@@ -54,13 +62,9 @@ fun ExportReportScreen(onBack: () -> Unit) {
             
             Spacer(modifier = Modifier.height(24.dp))
             
+            Text("Generate Clinical Report", fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Text(
-                "Generate Clinical Report",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "Create a professional PDF summary for case presentation or records.",
+                "Create a professional PDF summary containing full patient details, clinical measurements, ABO scores, and dynamic recommendations pulled directly from Firestore.",
                 color = TextGray,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
@@ -86,15 +90,6 @@ fun ExportReportScreen(onBack: () -> Unit) {
                         Text("Include Clinical Photos")
                         Switch(checked = includePhotos, onCheckedChange = { includePhotos = it })
                     }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Include Guideline References")
-                        Switch(checked = includeGuidelines, onCheckedChange = { includeGuidelines = it })
-                    }
                 }
             }
 
@@ -103,13 +98,24 @@ fun ExportReportScreen(onBack: () -> Unit) {
             if (isGenerating) {
                 CircularProgressIndicator(color = PrimaryGreen)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Generating PDF...", color = TextGray)
+                Text("Retrieving Firestore Data & Generating PDF...", color = TextGray)
             } else {
                 Button(
-                    onClick = { isGenerating = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
+                    onClick = { 
+                        isGenerating = true 
+                        scope.launch {
+                            // Retrieve full SavedCase from Firestore
+                            val caseFlow = caseRepository.observeCases()
+                            caseFlow.collect { cases ->
+                                val targetCase = cases.find { it.id == caseId }
+                                if (targetCase != null) {
+                                    PdfGenerator.generateAndSharePdf(context, targetCase)
+                                }
+                                isGenerating = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen)
                 ) {

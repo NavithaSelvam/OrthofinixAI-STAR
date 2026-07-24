@@ -42,21 +42,27 @@ def get_patient_cases(patient_id: str, current_user: UserInfo = Depends(get_curr
 async def upload_case_image(case_id: str, file: UploadFile = File(...), current_user: UserInfo = Depends(get_current_user)):
     """
     Upload an image (OPG/Photo) for a specific case.
-    Stores the image (e.g., in Firebase Storage - simplified here) and links to the case.
+    Stores the image locally and links to the case.
     """
-    db = get_db()
-    # In a real app, upload to Firebase Cloud Storage, get public URL
-    # For now, we simulate this step.
+    from app.db.firebase import upload_image_to_storage
     
+    db = get_db()
+    
+    # Read image bytes
+    image_bytes = await file.read()
+    
+    # Upload to local storage
     image_id = str(uuid.uuid4())
+    storage_url = upload_image_to_storage(image_bytes, file.filename, file.content_type or "image/jpeg")
+    
     image_data = {
         "id": image_id,
         "case_id": case_id,
         "filename": file.filename,
         "content_type": file.content_type,
-        "storage_url": f"https://storage.example.com/mock/{image_id}",
+        "storage_url": storage_url,
         "uploaded_at": datetime.utcnow()
     }
     
     db.collection("images").document(image_id).set(image_data)
-    return {"message": "Image uploaded successfully", "image_id": image_id, "url": image_data["storage_url"]}
+    return {"message": "Image uploaded successfully", "image_id": image_id, "url": storage_url}

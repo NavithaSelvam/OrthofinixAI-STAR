@@ -13,7 +13,7 @@ class User(Base):
 
     id = Column(String, primary_key=True)
     email = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=False)
+    password_hash = Column(String, nullable=True)
     display_name = Column(String, default="Doctor")
     role = Column(String, default="doctor")
     created_at = Column(DateTime, default=utcnow)

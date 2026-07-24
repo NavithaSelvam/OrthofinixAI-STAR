@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.orthofinixai.data.model.ClinicalRecommendationDto
 import com.example.orthofinixai.ui.theme.PrimaryGreen
 import com.example.orthofinixai.ui.theme.TextGray
 import com.example.orthofinixai.ui.viewmodel.AnalysisViewModel
@@ -52,86 +53,27 @@ fun RecommendationsScreen(
                 .background(Color(0xFFF9FAFB))
         ) {
             when (uiState) {
-                is AnalysisState.Processing -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(color = PrimaryGreen, strokeWidth = 4.dp)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Compiling clinical AI recommendations list...", color = TextGray, fontSize = 14.sp)
-                    }
-                }
-                is AnalysisState.Error -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red, modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("No Recommendations Loaded", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.Black)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text((uiState as AnalysisState.Error).message, color = TextGray, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(
-                            onClick = onBack,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Go Back")
-                        }
-                    }
-                }
+                is AnalysisState.Processing -> RecsLoadingState()
+                is AnalysisState.Error -> RecsErrorState((uiState as AnalysisState.Error).message, onBack)
                 else -> {
                     val report = (uiState as? AnalysisState.Success)?.report
-                    
-                    // Parse real backend recommendations dynamically
-                    val liveRecs = report?.recommendations?.mapIndexed { index, recString ->
-                        val parts = recString.split(":")
-                        val title = if (parts.size > 1) parts[0].trim() else "AI Correction Step #${index + 1}"
-                        val desc = if (parts.size > 1) parts[1].trim() else recString
-                        val step = if (desc.contains("wire", ignoreCase = true) || desc.contains("elastic", ignoreCase = true)) {
-                            "Incorporate finishing detail or mechanic in current wire sequence."
+                    val structured = report?.structured_recommendations.orEmpty()
+
+                    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Personalized Correction Steps", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "${structured.size} recommendations from measured clinical findings",
+                            color = TextGray, fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (structured.isEmpty()) {
+                            Text("No structured recommendations — run a new analysis.", color = TextGray)
                         } else {
-                            "Evaluate clinical bracket/band alignment on next office visit."
-                        }
-                        Recommendation(
-                            title = title,
-                            description = desc,
-                            step = step,
-                            reference = "AI Engine Output"
-                        )
-                    } ?: emptyList()
-
-                    val displayRecommendations = liveRecs.ifEmpty { sampleRecommendations }
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            "Personalized Correction Steps",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                        Text(
-                            "Suggested mechanics based on AI assessment",
-                            color = TextGray,
-                            fontSize = 14.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(displayRecommendations) { recommendation ->
-                                RecommendationCard(recommendation)
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                items(structured, key = { it.discrepancyDetected }) { rec ->
+                                    StructuredRecommendationCard(rec)
+                                }
                             }
                         }
                     }
@@ -142,7 +84,12 @@ fun RecommendationsScreen(
 }
 
 @Composable
-fun RecommendationCard(rec: Recommendation) {
+private fun StructuredRecommendationCard(rec: ClinicalRecommendationDto) {
+    val severityColor = when (rec.severity) {
+        "Severe" -> Color(0xFFDC2626)
+        "Moderate" -> Color(0xFFF59E0B)
+        else -> PrimaryGreen
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -151,73 +98,64 @@ fun RecommendationCard(rec: Recommendation) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Lightbulb, contentDescription = null, tint = PrimaryGreen)
+                Icon(Icons.Default.Lightbulb, contentDescription = null, tint = severityColor)
                 Spacer(modifier = Modifier.width(12.dp))
-                Text(rec.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
+                Column {
+                    Text("Priority ${rec.priority}", fontSize = 11.sp, color = TextGray)
+                    Text(rec.discrepancyDetected, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            Text(rec.description, fontSize = 14.sp, color = Color.Black)
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(rec.clinicalActionStep, fontSize = 14.sp, color = Color.Black)
+            if (rec.affectedTeeth.isNotEmpty()) {
+                Text(
+                    "Teeth (FDI): ${rec.affectedTeeth.joinToString(", ")}",
+                    fontSize = 12.sp, color = TextGray, modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
             HorizontalDivider(color = Color(0xFFF3F4F6))
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
+            Spacer(modifier = Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.Top) {
                 Icon(Icons.Default.Build, contentDescription = null, tint = TextGray, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
-                    Text("Corrective Step:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = PrimaryGreen)
-                    Text(rec.step, fontSize = 13.sp, color = TextGray)
+                    Text("Expected outcome:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = PrimaryGreen)
+                    Text(rec.expectedOutcome, fontSize = 12.sp, color = TextGray)
                 }
             }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
             Text(
-                "Reference: ${rec.reference}",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = PrimaryGreen.copy(alpha = 0.7f),
-                modifier = Modifier.align(Alignment.End)
+                "${rec.guidelineSource} • ${rec.severity}",
+                fontSize = 11.sp, color = PrimaryGreen.copy(alpha = 0.8f),
+                modifier = Modifier.align(Alignment.End).padding(top = 8.dp)
             )
         }
     }
 }
 
-data class Recommendation(
-    val title: String,
-    val description: String,
-    val step: String,
-    val reference: String
-)
+@Composable
+private fun RecsLoadingState() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator(color = PrimaryGreen)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Compiling clinical recommendations from measured findings...", color = TextGray)
+    }
+}
 
-val sampleRecommendations = listOf(
-    Recommendation(
-        "Open Contact UR2-UR3",
-        "A small space is detected between the upper right lateral incisor and canine.",
-        "Use sliding mechanics with an elastomeric chain or adjust bracket position to close space.",
-        "ABO Interproximal Contacts"
-    ),
-    Recommendation(
-        "Marginal Ridge Discrepancy",
-        "The marginal ridges of UR6 and UR7 are not leveled in the occlusal plane.",
-        "Incorporate a vertical finishing bend in the archwire or use vertical elastics.",
-        "ABO OGS Criterion 2"
-    ),
-    Recommendation(
-        "Insufficient Lower Incisor Torque",
-        "Lower incisors show more lingual inclination than Andrews' ideal.",
-        "Consider bracket repositioning or adding labial root torque to the finishing wire.",
-        "Andrews Key 3"
-    ),
-    Recommendation(
-        "Curve of Spee Leveling",
-        "The mandibular arch still exhibits a 1.5mm deep curve of Spee.",
-        "Continue with a reverse curve of Spee wire or use bite opening mechanics.",
-        "Raleigh-Williams Key 4"
-    )
-)
+@Composable
+private fun RecsErrorState(message: String, onBack: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red, modifier = Modifier.size(48.dp))
+        Text(message, color = TextGray)
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onBack) { Text("Go Back") }
+    }
+}

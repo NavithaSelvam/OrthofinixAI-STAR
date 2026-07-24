@@ -1,7 +1,7 @@
 package com.example.orthofinixai.data.repository
 
 import android.content.Context
-import com.example.orthofinixai.data.SessionManager
+import android.util.Log
 import com.example.orthofinixai.data.local.OrthofinixDatabase
 import com.example.orthofinixai.data.local.entity.PatientEntity
 import com.example.orthofinixai.data.model.Patient
@@ -9,46 +9,78 @@ import com.example.orthofinixai.data.model.PatientCreate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class PatientRepository(private val context: Context) {
 
-    private val patientDao = OrthofinixDatabase.getInstance(context).patientDao()
-    private fun userId() = SessionManager.requireUserId()
+    private val patientDao by lazy { OrthofinixDatabase.getInstance(context).patientDao() }
 
-    fun getPatients(): Flow<List<Patient>> =
-        patientDao.getPatientsForUser(userId()).map { list -> list.map { it.toPatient() } }
-
-    fun createPatient(patient: PatientCreate): Flow<Patient> = flow {
-        val created = createPatientInternal(patient)
-        emit(created)
+    fun getPatients(): Flow<Result<List<Patient>>> {
+        val userId = AuthRepository.getCurrentUserId()
+        return patientDao.getPatientsForUser(userId).map { entities ->
+            Result.success(entities.map { it.toPatient() })
+        }
     }
 
-    private suspend fun createPatientInternal(patient: PatientCreate): Patient {
-        val id = "OF-${System.currentTimeMillis()}"
-        val entity = PatientEntity(
-            id = id,
-            userId = userId(),
-            name = patient.name,
-            dateOfBirth = patient.date_of_birth,
-            age = estimateAge(patient.date_of_birth),
-            gender = patient.gender,
-            phone = patient.contact_info.orEmpty()
-        )
-        patientDao.insertPatient(entity)
-        return entity.toPatient()
+    fun createPatient(patient: PatientCreate): Flow<Result<Patient>> = flow {
+        try {
+            val userId = AuthRepository.getCurrentUserId()
+            val id = "PT-${System.currentTimeMillis()}"
+            val entity = PatientEntity(
+                id = id,
+                userId = userId,
+                name = patient.name,
+                age = estimateAge(patient.dateOfBirth),
+                gender = patient.gender,
+                phone = patient.phone,
+                notes = patient.notes,
+                createdAt = System.currentTimeMillis()
+            )
+            patientDao.insertPatient(entity)
+            
+            val createdPatient = Patient(
+                id = id,
+                name = patient.name,
+                dateOfBirth = patient.dateOfBirth,
+                gender = patient.gender,
+                phone = patient.phone,
+                email = patient.email,
+                doctorName = patient.doctorName,
+                hospital = patient.hospital,
+                diagnosis = patient.diagnosis,
+                treatmentDate = patient.treatmentDate,
+                notes = patient.notes,
+                doctorId = userId,
+                createdAt = entity.createdAt
+            )
+            emit(Result.success(createdPatient))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create patient", e)
+            emit(Result.failure(e))
+        }
     }
 
     private fun PatientEntity.toPatient() = Patient(
         id = id,
         name = name,
-        date_of_birth = dateOfBirth.ifBlank { "${age}/01/2010" },
+        age = age,
         gender = gender,
-        contact_info = phone,
-        created_at = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(createdAt))
+        phone = phone,
+        notes = notes,
+        createdAt = createdAt
     )
 
     private fun estimateAge(dob: String): Int {
-        val year = dob.split("/").lastOrNull()?.toIntOrNull() ?: 2010
-        return (2026 - year).coerceIn(5, 80)
+        return try {
+            val year = dob.split("/").lastOrNull()?.toIntOrNull() ?: 2010
+            (2026 - year).coerceIn(5, 80)
+        } catch (e: Exception) { 25 }
+    }
+
+    companion object {
+        private const val TAG = "PatientRepository"
     }
 }

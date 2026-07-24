@@ -18,7 +18,6 @@ from app.models.summit_schemas import (
 )
 from app.services.report_builder import (
     build_report_from_ai,
-    build_demo_report,
     report_to_response,
 )
 
@@ -53,14 +52,9 @@ async def analyze(
     patient_name: str = Form("Patient"),
     view_type: str = Form("frontal"),
     file: UploadFile = File(None),
-    demo: bool = Form(False),
     current_user: User = Depends(get_current_summit_user),
     db: Session = Depends(get_db_session),
 ):
-    if demo:
-        report = build_demo_report(db, current_user.id)
-        return report_to_response(report)
-
     image_bytes = None
     image_url = None
 
@@ -76,9 +70,15 @@ async def analyze(
     else:
         raise HTTPException(400, "Provide upload_id or image file")
 
-    report = build_report_from_ai(
-        db, current_user.id, image_bytes, patient_name, image_url, view_type
-    )
+    try:
+        report = build_report_from_ai(
+            db, current_user.id, image_bytes, patient_name, image_url, view_type
+        )
+    except ValueError as e:
+        if upload_id in _upload_cache:
+            del _upload_cache[upload_id]
+        raise HTTPException(status_code=400, detail=str(e))
+        
     if upload_id in _upload_cache:
         del _upload_cache[upload_id]
     return report_to_response(report)

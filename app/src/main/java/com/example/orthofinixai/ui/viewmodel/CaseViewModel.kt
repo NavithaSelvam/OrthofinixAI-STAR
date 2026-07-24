@@ -48,9 +48,15 @@ class CaseViewModel(application: Application) : AndroidViewModel(application) {
                 loadCases()
                 return@launch
             }
-            repository.searchCases(query)
+            repository.observeCases()
                 .catch { _uiState.value = CaseListState.Error(it.message ?: "Search failed") }
-                .collect { _uiState.value = CaseListState.Success(it) }
+                .collect { cases ->
+                    val filtered = cases.filter {
+                        it.patientName.contains(query, ignoreCase = true) ||
+                        it.id.contains(query, ignoreCase = true)
+                    }
+                    _uiState.value = CaseListState.Success(filtered)
+                }
         }
     }
 }

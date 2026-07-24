@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { analysisApi, HistoryItem } from '../lib/api';
-import { DEMO_HISTORY } from '../lib/demo';
 
 export default function HistoryPage() {
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -13,19 +12,21 @@ export default function HistoryPage() {
     setLoading(true);
     analysisApi
       .history()
-      .then(({ data }) => setItems(data))
+      .then(({ data }) => {
+        // Map backend response to frontend interface
+        const mappedItems = data.map((item: any) => ({
+          id: item.id,
+          patient_name: item.patient_name,
+          finishing_score: item.finishing_score,
+          confidence_score: item.confidence_score,
+          created_at: item.created_at,
+          image_url: item.image_url,
+          user_id: item.user_id
+        }));
+        setItems(mappedItems);
+      })
       .catch(() => {
         setError(true);
-        setItems(
-          DEMO_HISTORY.map((r) => ({
-            id: r.id,
-            patient_name: r.patient_name,
-            finishing_score: r.finishing_score,
-            confidence_score: r.confidence_score,
-            created_at: r.created_at,
-            image_url: r.image_url,
-          }))
-        );
       })
       .finally(() => setLoading(false));
   };

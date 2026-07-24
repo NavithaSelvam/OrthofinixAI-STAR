@@ -15,6 +15,12 @@ interface PatientDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPatient(patient: PatientEntity)
 
+    @Update
+    suspend fun updatePatient(patient: PatientEntity)
+
     @Delete
     suspend fun deletePatient(patient: PatientEntity)
+
+    @Query("SELECT * FROM patients WHERE userId = :userId AND name LIKE '%' || :query || '%'")
+    fun searchPatients(userId: String, query: String): Flow<List<PatientEntity>>
 }

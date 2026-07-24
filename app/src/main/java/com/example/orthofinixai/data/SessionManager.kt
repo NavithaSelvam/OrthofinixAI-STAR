@@ -24,7 +24,7 @@ object SessionManager {
         currentUser = User(
             uid = uid,
             email = prefs.getString(KEY_EMAIL, "") ?: "",
-            display_name = prefs.getString(KEY_NAME, "Doctor") ?: "Doctor"
+            displayName = prefs.getString(KEY_NAME, "Doctor") ?: "Doctor"
         )
         return true
     }
@@ -35,7 +35,7 @@ object SessionManager {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_UID, user.uid)
             .putString(KEY_EMAIL, user.email)
-            .putString(KEY_NAME, user.display_name ?: "Doctor")
+            .putString(KEY_NAME, user.displayName ?: "Doctor")
             .apply()
     }
 

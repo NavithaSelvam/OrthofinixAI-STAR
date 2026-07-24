@@ -18,6 +18,19 @@ data class ClinicalFindingDto(
     val explanation: String
 )
 
+data class PointDto(val x: Float, val y: Float)
+
+data class ToothLandmarkDto(
+    val fdi: Int,
+    val incisal_edge: PointDto,
+    val apex: PointDto,
+    val long_axis_incisal: PointDto,
+    val contact_mesial: PointDto,
+    val contact_distal: PointDto,
+    val center: PointDto,
+    val occlusal_surface: PointDto?
+)
+
 data class AIReport(
     val id: String,
     val case_id: String,
@@ -40,5 +53,16 @@ data class AIReport(
     val andrews_violations: List<String> = emptyList(),
     val low_confidence_warning: String? = null,
     val detected_teeth_count: Int = 0,
-    val view_type: String = "frontal"
+    val view_type: String = "frontal",
+    val tooth_landmarks: Map<Int, ToothLandmarkDto> = emptyMap(),
+    val abo_total_deductions: Int = 0,
+    val abo_finishing_grade: String = "",
+    val abo_categories: List<AboCategoryDto> = emptyList(),
+    val andrews_keys: List<AndrewsKeyDto> = emptyList(),
+    val roling_score: Float = 0f,
+    val roling_parameters: List<RolingParameterDto> = emptyList(),
+    val raleigh_williams_score: Float = 0f,
+    val raleigh_williams_keys: List<RaleighWilliamsKeyDto> = emptyList(),
+    val structured_recommendations: List<ClinicalRecommendationDto> = emptyList(),
+    val overall_finishing_score: Float = 0f
 )

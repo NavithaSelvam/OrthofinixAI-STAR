@@ -2,90 +2,129 @@ package com.example.orthofinixai.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.example.orthofinixai.R
 import com.example.orthofinixai.data.SessionManager
 import com.example.orthofinixai.data.model.User
 import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.example.orthofinixai.R
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 class AuthRepository(private val context: Context) {
 
-    private val auth = FirebaseAuth.getInstance()
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun getGoogleSignInClient(): GoogleSignInClient {
-        val builder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        val optionsBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestProfile()
+
         val webClientId = context.getString(R.string.default_web_client_id).trim()
         if (webClientId.isNotEmpty()) {
-            builder.requestIdToken(webClientId)
+            optionsBuilder.requestIdToken(webClientId)
         }
-        return GoogleSignIn.getClient(context, builder.build())
+
+        return GoogleSignIn.getClient(context, optionsBuilder.build())
     }
 
-    suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
-        return try {
-            auth.sendPasswordResetEmail(email).await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+    fun restoreSession(): User? {
+        val firebaseUser = auth.currentUser ?: return null
+        val user = mapFirebaseUser(firebaseUser)
+        SessionManager.onLogin(user, context)
+        
+        repositoryScope.launch {
+            try {
+                val doc = firestore.collection("users").document(user.uid).get().await()
+                if (!doc.exists()) {
+                    saveUserToFirestore(user)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking/creating user doc", e)
+            }
+        }
+        return user
+    }
+
+    fun signInWithGoogle(idToken: String, onResult: (Result<User>) -> Unit) {
+        repositoryScope.launch {
+            try {
+                val user = if (idToken.isNotBlank()) {
+                    val credential = GoogleAuthProvider.getCredential(idToken, null)
+                    auth.signInWithCredential(credential).await()
+                    val firebaseUser = auth.currentUser
+                        ?: throw IllegalStateException("Firebase user missing after Google sign-in")
+                    
+                    val userObj = mapFirebaseUser(firebaseUser)
+                    
+                    // Ensure user exists in Firestore
+                    saveUserToFirestore(userObj)
+                    
+                    userObj
+                } else {
+                    throw IllegalStateException("ID token is blank")
+                }
+                SessionManager.onLogin(user, context)
+                withContext(Dispatchers.Main) {
+                    onResult(Result.success(user))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Google sign-in failed", e)
+                withContext(Dispatchers.Main) {
+                    onResult(Result.failure(e))
+                }
+            }
         }
     }
 
-    suspend fun signInWithGoogle(account: GoogleSignInAccount): Result<User> {
-        return try {
-            val idToken = account.idToken
-            if (!idToken.isNullOrBlank()) {
-                val credential = GoogleAuthProvider.getCredential(idToken, null)
-                auth.signInWithCredential(credential).await()
-            }
-            val firebaseUser = auth.currentUser
-            val user = if (firebaseUser != null) {
-                User(
-                    uid = firebaseUser.uid,
-                    email = firebaseUser.email ?: account.email ?: "",
-                    display_name = firebaseUser.displayName ?: account.displayName ?: "Doctor"
-                )
-            } else {
-                User(
-                    uid = "google-${(account.email ?: account.id ?: "").hashCode()}",
-                    email = account.email ?: "",
-                    display_name = account.displayName ?: account.givenName ?: "Doctor"
-                )
-            }
-            SessionManager.onLogin(user, context)
-            Result.success(user)
+    private suspend fun saveUserToFirestore(user: User) {
+        try {
+            firestore.collection("users").document(user.uid).set(user).await()
         } catch (e: Exception) {
-            Log.e(TAG, "Google Firebase sign-in failed, using local Google session", e)
-            val user = User(
-                uid = "google-${(account.email ?: "").hashCode()}",
-                email = account.email ?: "user@gmail.com",
-                display_name = account.displayName ?: "Doctor"
-            )
-            SessionManager.onLogin(user, context)
-            Result.success(user)
+            Log.e(TAG, "Failed to save user to Firestore", e)
+        }
+    }
+
+    fun sendPasswordResetEmail(email: String, onResult: (Result<Unit>) -> Unit) {
+        repositoryScope.launch {
+            try {
+                auth.sendPasswordResetEmail(email).await()
+                withContext(Dispatchers.Main) {
+                    onResult(Result.success(Unit))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Password reset failed", e)
+                withContext(Dispatchers.Main) {
+                    onResult(Result.failure(e))
+                }
+            }
         }
     }
 
     suspend fun signInWithEmail(email: String, password: String): Result<User> {
         return try {
             auth.signInWithEmailAndPassword(email, password).await()
+            val firebaseUser = auth.currentUser
+            
+            // Force reload to check status accurately
+            firebaseUser?.reload()?.await()
+            
             getCurrentUserResult()
         } catch (e: Exception) {
-            val user = User(
-                uid = "email-${email.hashCode()}",
-                email = email,
-                display_name = email.substringBefore("@").replaceFirstChar { it.uppercase() }
-            )
-            SessionManager.onLogin(user, context)
-            Result.success(user)
+            Log.e(TAG, "Email sign-in failed", e)
+            Result.failure(e)
         }
     }
 
@@ -96,44 +135,66 @@ class AuthRepository(private val context: Context) {
                 this.displayName = displayName
             }
             authResult.user?.updateProfile(profileUpdates)?.await()
-            getCurrentUserResult()
-        } catch (e: Exception) {
-            val user = User(uid = "email-${email.hashCode()}", email = email, display_name = displayName)
-            SessionManager.onLogin(user, context)
+            
+            val user = mapFirebaseUser(authResult.user!!)
+            
+            // Save user profile to Firestore
+            saveUserToFirestore(user)
+            
             Result.success(user)
+        } catch (e: Exception) {
+            Log.e(TAG, "Email sign-up failed", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getUserIdToken(): String? {
+        return try {
+            val user = auth.currentUser
+
+            Log.d(TAG, "Firebase User UID: ${user?.uid}")
+            Log.d(TAG, "Firebase Email: ${user?.email}")
+
+            // ALWAYS pass true to force refresh and ensure token is fresh
+            val tokenResult = user?.getIdToken(true)?.await()
+
+            val token = tokenResult?.token
+            Log.d("TOKEN_DEBUG", "TOKEN = $token")
+
+            Log.d(TAG, "TOKEN EXISTS: ${token != null}")
+            Log.d(TAG, "TOKEN LENGTH: ${token?.length}")
+
+            token
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to fetch ID token", e)
+            null
         }
     }
 
     private suspend fun getCurrentUserResult(): Result<User> {
-        val firebaseUser = auth.currentUser
-        if (firebaseUser != null) {
-            val user = User(
-                uid = firebaseUser.uid,
-                email = firebaseUser.email ?: "",
-                display_name = firebaseUser.displayName ?: "Doctor"
-            )
-            SessionManager.onLogin(user, context)
+        val user = restoreSession()
+        if (user != null) {
             return Result.success(user)
         }
-        SessionManager.currentUser?.let { return Result.success(it) }
-        return Result.failure(Exception("No user signed in"))
+        return Result.failure(IllegalStateException("No user signed in"))
     }
 
-    fun restoreSession(): User? {
-        if (SessionManager.restore(context)) return SessionManager.currentUser
-        val firebaseUser = auth.currentUser ?: return null
-        val user = User(
+    private fun mapFirebaseUser(firebaseUser: FirebaseUser): User {
+        return User(
             uid = firebaseUser.uid,
             email = firebaseUser.email ?: "",
-            display_name = firebaseUser.displayName ?: "Doctor"
+            displayName = firebaseUser.displayName ?: "Doctor"
         )
-        SessionManager.onLogin(user, context)
-        return user
     }
 
     fun getCurrentUser(): Flow<Result<User>> = flow {
-        restoreSession()?.let { emit(Result.success(it)); return@flow }
-        emit(Result.failure(Exception("Not signed in")))
+        val restored = restoreSession()
+        if (restored != null) {
+            emit(Result.success(restored))
+        } else {
+            emit(Result.failure(IllegalStateException("Not signed in")))
+        }
     }
 
     fun logout() {
@@ -142,22 +203,33 @@ class AuthRepository(private val context: Context) {
         SessionManager.onLogout(context)
     }
 
+
+
     companion object {
         private const val TAG = "AuthRepository"
-        @Volatile private var appContext: Context? = null
+
+        @Volatile
+        private var appContext: Context? = null
 
         fun initialize(context: Context) {
             appContext = context.applicationContext
-            SessionManager.restore(context)
-            FirebaseAuth.getInstance().currentUser?.let { u ->
+            SessionManager.restore(context.applicationContext)
+            FirebaseAuth.getInstance().currentUser?.let { firebaseUser ->
                 SessionManager.onLogin(
-                    User(u.uid, u.email ?: "", u.displayName ?: "Doctor"),
+                    User(
+                        uid = firebaseUser.uid,
+                        email = firebaseUser.email ?: "",
+                        displayName = firebaseUser.displayName ?: "Doctor"
+                    ),
                     context.applicationContext
                 )
             }
         }
 
-        fun instance(): AuthRepository =
-            AuthRepository(appContext ?: throw IllegalStateException("AuthRepository not initialized"))
+        fun getCurrentUserId(): String {
+            return SessionManager.currentUserId
+                ?: FirebaseAuth.getInstance().currentUser?.uid
+                ?: "anonymous"
+        }
     }
 }

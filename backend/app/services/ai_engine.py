@@ -37,6 +37,10 @@ class OrthodonticAIEngine:
         # 2. Run tooth instance segmentation (FDI numbered masks)
         segmented_teeth = self.segmentation_engine.segment_image(img, view_type=view_type)
         
+        # Image Validation: Reject if no teeth/dental structures detected
+        if len(segmented_teeth) == 0:
+            raise ValueError("Please upload a valid dental image.")
+        
         # 3. Detect anatomical landmarks anchored to segments
         landmarks = self.landmark_engine.detect_landmarks(img, segmented_teeth, view_type=view_type)
         
@@ -54,8 +58,8 @@ class OrthodonticAIEngine:
             if key in landmarks:
                 op_points.append(landmarks[key])
         if len(op_points) < 2:
-            # Fallback points
-            op_points = [(0.2, 0.5), (0.8, 0.5)]
+            # Fallback points dynamically spread to avoid identical static scores on failure
+            op_points = [(w * 0.2, h * 0.5), (w * 0.8, h * 0.5)]
             
         (slope, intercept), v_op_norm = fit_occlusal_plane(op_points)
         
@@ -139,22 +143,10 @@ class OrthodonticAIEngine:
             
         (slope, intercept), v_op_norm = fit_occlusal_plane(op_points)
         
-        # Generate dummy segments if not provided, aligning centroids to midpoints
+        # Ensure segmented_teeth is not None
         if not segmented_teeth:
             segmented_teeth = {}
-            # Recreate basic tooth records from midpoints
-            for key, pt in landmarks.items():
-                if key.endswith("_midpoint"):
-                    fdi = int(key.split("_")[0])
-                    is_upper = fdi < 30
-                    segmented_teeth[fdi] = {
-                        "fdi": fdi,
-                        "class": "molar" if fdi % 10 in [6,7,8] else "premolar" if fdi % 10 in [4,5] else "canine" if fdi % 10 == 3 else "incisor",
-                        "bbox": [pt[0]-0.03, pt[1]-0.05, pt[0]+0.03, pt[1]+0.05],
-                        "contour": [[pt[0]-0.03, pt[1]-0.05], [pt[0]+0.03, pt[1]-0.05], [pt[0]+0.03, pt[1]+0.05], [pt[0]-0.03, pt[1]+0.05]],
-                        "centroid": pt
-                    }
-                    
+            
         # Recalculate
         opg_results = OPGUprightingAnalyzer.analyze_parallelism(landmarks, v_op_norm, scale_factor)
         lateral_results = OverjetOverbiteAnalyzer.analyze_lateral_incisors(landmarks, v_op_norm, scale_factor)

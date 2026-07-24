@@ -27,7 +27,14 @@ fun AddPatientScreen(onBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var age by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("Male") }
-    var symptoms by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var doctorName by remember { mutableStateOf("") }
+    var hospital by remember { mutableStateOf("") }
+    var diagnosis by remember { mutableStateOf("") }
+    var treatmentDate by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    
     var isSaving by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -54,20 +61,12 @@ fun AddPatientScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Enter patient clinical details", fontSize = 16.sp, color = Color.Gray)
+            Text("Enter full clinical details", fontSize = 16.sp, color = Color.Gray)
             Spacer(modifier = Modifier.height(32.dp))
 
-            OutlinedTextField(
-                value = name, onValueChange = { name = it },
-                label = { Text("Patient Name") },
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)
-            )
+            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Patient Name") }, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = age, onValueChange = { age = it },
-                label = { Text("Age") },
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)
-            )
+            OutlinedTextField(value = age, onValueChange = { age = it }, label = { Text("Age") }, modifier = Modifier.fillMaxWidth())
             Spacer(modifier = Modifier.height(16.dp))
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text("Gender", fontWeight = FontWeight.Medium)
@@ -80,12 +79,20 @@ fun AddPatientScreen(onBack: () -> Unit) {
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(
-                value = symptoms, onValueChange = { symptoms = it },
-                label = { Text("Symptoms") },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-                shape = RoundedCornerShape(12.dp), maxLines = 5
-            )
+            OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("Phone Number") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(value = doctorName, onValueChange = { doctorName = it }, label = { Text("Doctor Name") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(value = hospital, onValueChange = { hospital = it }, label = { Text("Hospital") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(value = diagnosis, onValueChange = { diagnosis = it }, label = { Text("Diagnosis") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(value = treatmentDate, onValueChange = { treatmentDate = it }, label = { Text("Treatment Date (dd/mm/yyyy)") }, modifier = Modifier.fillMaxWidth())
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes") }, modifier = Modifier.fillMaxWidth().height(120.dp), maxLines = 5)
+            
             Spacer(modifier = Modifier.height(32.dp))
 
             if (isSaving) {
@@ -100,11 +107,26 @@ fun AddPatientScreen(onBack: () -> Unit) {
                             scope.launch {
                                 val dob = "01/01/${2026 - age.toIntOrNull()!!}"
                                 repository.createPatient(
-                                    PatientCreate(name, dob, gender, symptoms.ifBlank { null })
-                                ).collect {
+                                    PatientCreate(
+                                        name = name,
+                                        dateOfBirth = dob,
+                                        gender = gender,
+                                        phone = phone,
+                                        email = email,
+                                        doctorName = doctorName,
+                                        hospital = hospital,
+                                        diagnosis = diagnosis,
+                                        treatmentDate = treatmentDate,
+                                        notes = notes
+                                    )
+                                ).collect { result ->
                                     isSaving = false
-                                    Toast.makeText(context, "Patient saved locally", Toast.LENGTH_SHORT).show()
-                                    onBack()
+                                    result.onSuccess {
+                                        Toast.makeText(context, "Patient saved to Firebase", Toast.LENGTH_SHORT).show()
+                                        onBack()
+                                    }.onFailure {
+                                        Toast.makeText(context, "Failed to save patient", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             }
                         }

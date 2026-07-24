@@ -7,6 +7,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -86,12 +87,7 @@ fun PatientInfoScreen(
                             contentDescription = "Back"
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = ClinicalDeepNavy,
-                    titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
-                )
+                }
             )
         },
         containerColor = BackgroundClinical
@@ -287,13 +283,20 @@ fun ClinicalInputField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
+
+            textStyle = LocalTextStyle.current.copy(
+                color = Color.Black
+            ),
+
             modifier = Modifier.fillMaxWidth(),
+
             placeholder = {
                 Text(
                     placeholder,
                     color = ClinicalSlate.copy(alpha = 0.5f)
                 )
             },
+
             leadingIcon = {
                 Icon(
                     icon,
@@ -301,13 +304,24 @@ fun ClinicalInputField(
                     tint = ClinicalSkyBlue
                 )
             },
+
             shape = RoundedCornerShape(12.dp),
+
             isError = error != null,
+
             colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.Black,
+                unfocusedTextColor = Color.Black,
+                cursorColor = Color.Black,
+
                 focusedBorderColor = ClinicalSkyBlue,
                 unfocusedBorderColor = BorderClinical,
+
                 focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White
+                unfocusedContainerColor = Color.White,
+
+                focusedPlaceholderColor = ClinicalSlate,
+                unfocusedPlaceholderColor = ClinicalSlate
             )
         )
 

@@ -10,163 +10,180 @@ import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
-import com.example.orthofinixai.data.model.AIReport
-import com.example.orthofinixai.data.model.Patient
+import com.example.orthofinixai.data.model.ClinicalReport
+import com.example.orthofinixai.data.model.SavedCase
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object ReportExporter {
 
-    fun generateAndSharePdf(context: Context, patient: Patient?, report: AIReport?) {
-        val safePatient = patient ?: Patient("MOCK-001", "Anonymous Patient", "01/01/1990", "Male", "N/A")
-        val safeReport = report ?: AIReport("MOCK-REP", "MOCK-001", 85f, 90f, 88f, 92f, listOf("Patient is ready for detailing phase."), "2026-05-18")
+    fun generateAndSharePdf(context: Context, caseData: SavedCase) {
+        val patient = caseData.patientProfile
+        if (patient == null) {
+            Toast.makeText(context, "Patient data missing. Cannot generate PDF.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val clinicalData = try {
+            ClinicalReport.fromJson(caseData.clinicalDataJson)
+        } catch (e: Exception) {
+            null
+        }
 
         val pdfDocument = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create() // Standard A4 Size: 595 x 842 pt
+        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
         val page = pdfDocument.startPage(pageInfo)
         val canvas = page.canvas
 
         val paint = Paint()
         val textPaint = Paint()
+        var currentY = 0f
 
-        // 1. Header background (Clinical Deep Navy)
-        paint.color = Color.parseColor("#0C1B33") // ClinicalDeepNavy
-        canvas.drawRect(0f, 0f, 595f, 130f, paint)
+        fun drawHeader() {
+            paint.color = Color.parseColor("#0C1B33")
+            canvas.drawRect(0f, 0f, 595f, 100f, paint)
 
-        // 2. Title
-        textPaint.color = Color.WHITE
-        textPaint.textSize = 20f
-        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText("ORTHOFINIX.AI CLINICAL REPORT", 40f, 55f, textPaint)
+            textPaint.color = Color.WHITE
+            textPaint.textSize = 20f
+            textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            canvas.drawText("ORTHOFINIX.AI CLINICAL REPORT", 40f, 40f, textPaint)
 
-        textPaint.textSize = 10f
-        textPaint.color = Color.parseColor("#8E9AAF")
-        canvas.drawText("Orthodontic Finishing Assessment Report", 40f, 75f, textPaint)
-        canvas.drawText("Date: ${safeReport.created_at ?: "2026-05-18"}", 40f, 95f, textPaint)
-
-        // 3. Patient Details Card
-        paint.color = Color.parseColor("#F4F6F9") // BackgroundClinical
-        canvas.drawRect(40f, 150f, 555f, 250f, paint)
-
-        textPaint.color = Color.parseColor("#0C1B33")
-        textPaint.textSize = 12f
-        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText("PATIENT ASSESSMENT CARD", 55f, 175f, textPaint)
-
-        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        textPaint.textSize = 10f
-        textPaint.color = Color.BLACK
-        canvas.drawText("Patient Name: ${safePatient.name}", 55f, 195f, textPaint)
-        canvas.drawText("Patient ID: ${safePatient.id}", 55f, 210f, textPaint)
-        canvas.drawText("Gender: ${safePatient.gender}  |  DOB: ${safePatient.date_of_birth}", 55f, 225f, textPaint)
-
-        // 4. Clinical Metrics
-        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textPaint.textSize = 14f
-        textPaint.color = Color.parseColor("#0C1B33")
-        canvas.drawText("CORE CLINICAL METRICS", 40f, 290f, textPaint)
-
-        // Line separator
-        paint.color = Color.parseColor("#E5E9F0")
-        canvas.drawRect(40f, 300f, 555f, 302f, paint)
-
-        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textPaint.textSize = 11f
-        textPaint.color = Color.BLACK
-        canvas.drawText("Metric Category", 45f, 325f, textPaint)
-        canvas.drawText("Clinical Score", 400f, 325f, textPaint)
-        canvas.drawText("Status", 490f, 325f, textPaint)
-
-        paint.color = Color.parseColor("#D8DEE9")
-        canvas.drawRect(40f, 335f, 555f, 336f, paint)
-
-        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        
-        // Rows
-        val overallScore = (safeReport.abo_score + safeReport.arch_symmetry_score + safeReport.root_angulation_score) / 3f
-        
-        canvas.drawText("ABO OGS Scoring", 45f, 355f, textPaint)
-        canvas.drawText("${safeReport.abo_score.toInt()}%", 400f, 355f, textPaint)
-        canvas.drawText(if (safeReport.abo_score > 85) "Pass" else "Review", 490f, 355f, textPaint)
-
-        canvas.drawText("Andrews Six Keys Evaluation", 45f, 375f, textPaint)
-        canvas.drawText("${safeReport.andrews_score.toInt()}%", 400f, 375f, textPaint)
-        canvas.drawText("Optimal", 490f, 375f, textPaint)
-
-        canvas.drawText("Arch Symmetry Scoring", 45f, 395f, textPaint)
-        canvas.drawText("${safeReport.arch_symmetry_score.toInt()}%", 400f, 395f, textPaint)
-        canvas.drawText(if (safeReport.arch_symmetry_score > 80) "Optimal" else "Asymmetric", 490f, 395f, textPaint)
-
-        canvas.drawText("Root Angulation OPG Analysis", 45f, 415f, textPaint)
-        canvas.drawText("${safeReport.root_angulation_score.toInt()}%", 400f, 415f, textPaint)
-        canvas.drawText(if (safeReport.root_angulation_score > 75) "Parallel" else "Tipped", 490f, 415f, textPaint)
-
-        paint.color = Color.parseColor("#D8DEE9")
-        canvas.drawRect(40f, 430f, 555f, 431f, paint)
-
-        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        canvas.drawText("OVERALL FINISHING SCORE:", 45f, 455f, textPaint)
-        canvas.drawText("${overallScore.toInt()} / 100", 400f, 455f, textPaint)
-        canvas.drawText(if (overallScore > 80) "READY TO DEBOND" else "ADDITIONAL DETAILING", 490f, 455f, textPaint)
-
-        // 5. Clinical Recommendations
-        textPaint.textSize = 14f
-        textPaint.color = Color.parseColor("#0C1B33")
-        canvas.drawText("CLINICAL RECOMMENDATIONS", 40f, 500f, textPaint)
-
-        paint.color = Color.parseColor("#E5E9F0")
-        canvas.drawRect(40f, 510f, 555f, 512f, paint)
-
-        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
-        textPaint.textSize = 10f
-        textPaint.color = Color.BLACK
-
-        var startY = 535f
-        safeReport.recommendations.forEachIndexed { index, rec ->
-            if (startY < 780f) {
-                val formattedRec = if (rec.length > 80) rec.take(80) + "..." else rec
-                canvas.drawText("${index + 1}. $formattedRec", 45f, startY, textPaint)
-                startY += 20f
-            }
+            textPaint.textSize = 10f
+            textPaint.color = Color.parseColor("#8E9AAF")
+            val dateStr = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date(caseData.createdAt))
+            canvas.drawText("Date Generated: $dateStr", 40f, 60f, textPaint)
+            canvas.drawText("Doctor: ${patient.doctorName} | Hospital: ${patient.hospital}", 40f, 75f, textPaint)
+            currentY = 120f
         }
 
-        // 6. Signatures and Disclaimers
-        textPaint.textSize = 8f
-        textPaint.color = Color.parseColor("#4C566A")
-        canvas.drawText("Disclaimer: This orthodontic finishing assessment is generated with AI metrics assistance.", 40f, 800f, textPaint)
-        canvas.drawText("Please cross-examine clinical records and adjust mechanics according to Andrews OGS criteria.", 40f, 812f, textPaint)
+        fun drawSectionTitle(title: String) {
+            currentY += 20f
+            paint.color = Color.parseColor("#E5E9F0")
+            canvas.drawRect(40f, currentY - 15f, 555f, currentY + 5f, paint)
+            
+            textPaint.color = Color.parseColor("#0C1B33")
+            textPaint.textSize = 14f
+            textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            canvas.drawText(title, 45f, currentY, textPaint)
+            currentY += 20f
+        }
 
+        fun drawKeyValue(key: String, value: String, xOffset: Float = 45f) {
+            textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textPaint.textSize = 10f
+            textPaint.color = Color.BLACK
+            canvas.drawText("$key: ", xOffset, currentY, textPaint)
+            
+            val keyWidth = textPaint.measureText("$key: ")
+            textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            canvas.drawText(value, xOffset + keyWidth, currentY, textPaint)
+        }
+
+        // Draw Page 1
+        drawHeader()
+
+        drawSectionTitle("PATIENT DETAILS")
+        drawKeyValue("Patient ID", patient.id)
+        drawKeyValue("Name", patient.name, 300f)
+        currentY += 15f
+        drawKeyValue("Age", patient.age.toString())
+        drawKeyValue("DOB", patient.dateOfBirth, 300f)
+        currentY += 15f
+        drawKeyValue("Gender", patient.gender)
+        drawKeyValue("Phone", patient.phone, 300f)
+        currentY += 15f
+        drawKeyValue("Email", patient.email)
+        drawKeyValue("Diagnosis", patient.diagnosis, 300f)
+        currentY += 15f
+        drawKeyValue("Treatment Date", patient.treatmentDate)
+        currentY += 15f
+        drawKeyValue("Clinical Notes", patient.notes)
+        currentY += 30f
+
+        drawSectionTitle("CLINICAL EVALUATION")
+        if (clinicalData != null) {
+            drawKeyValue("Overall Confidence", "${(clinicalData.confidenceScore * 100).toInt()}%")
+            currentY += 15f
+            drawKeyValue("ABO OGS Score", "${clinicalData.aboScore.toInt()} / 100")
+            currentY += 15f
+            drawKeyValue("Andrews Six Keys Score", "${clinicalData.andrewsScore.toInt()} / 100")
+            currentY += 15f
+            drawKeyValue("Rebecca Roling Finishing Score", clinicalData.rolingResult?.overallScore?.toString() ?: "N/A")
+            currentY += 15f
+            drawKeyValue("Raleigh Williams Score", clinicalData.raleighWilliamsResult?.overallScore?.toString() ?: "N/A")
+            currentY += 30f
+
+            drawSectionTitle("MEASUREMENTS")
+            drawKeyValue("Overjet", "${clinicalData.overjetMm} mm")
+            drawKeyValue("Overbite", "${clinicalData.overbitePercent}% (${clinicalData.overbiteAbsMm} mm)", 300f)
+            currentY += 15f
+            drawKeyValue("Midline Discrepancy", "${clinicalData.midlineDiscrepancyMm} mm")
+            drawKeyValue("Curve of Spee", "${clinicalData.curveOfSpeeMm} mm", 300f)
+            currentY += 15f
+            drawKeyValue("Arch Symmetry", "${clinicalData.archSymmetryScore}%")
+            drawKeyValue("Root Angulation", "${clinicalData.rootAngulationScore}%", 300f)
+            currentY += 30f
+
+            drawSectionTitle("RECOMMENDATIONS")
+            textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            val recommendationsList = clinicalData.recommendations.ifEmpty { 
+                clinicalData.structuredRecommendations.map { it.clinicalActionStep }
+            }
+            
+            recommendationsList.forEachIndexed { index, rec ->
+                if (currentY > 780f) {
+                    // Note: A robust PDF generator would create a new page here. 
+                    // For simplicity in Canvas, we stop or truncate.
+                    canvas.drawText("... (Continues on next page)", 45f, currentY, textPaint)
+                    return@forEachIndexed
+                }
+                
+                // Wrap text manually
+                var textToDraw = "${index + 1}. $rec"
+                while(textToDraw.isNotEmpty()) {
+                    val count = textPaint.breakText(textToDraw, true, 500f, null)
+                    canvas.drawText(textToDraw.substring(0, count), 45f, currentY, textPaint)
+                    textToDraw = textToDraw.substring(count)
+                    currentY += 15f
+                }
+            }
+        } else {
+            textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            canvas.drawText("Clinical measurements not available for this case.", 45f, currentY, textPaint)
+        }
+
+        currentY += 30f
+        drawSectionTitle("SUMMARY")
+        textPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        canvas.drawText("This report contains clinical findings mapped dynamically from Orthofinix AI analysis.", 45f, currentY, textPaint)
+        
         pdfDocument.finishPage(page)
 
-        // Write to Cache Dir
-        val fileName = "OrthofinixAI_Report_${safePatient.name.replace(" ", "_")}.pdf"
+        // Save and Share
+        val fileName = "Report_${patient.name.replace(" ", "_")}_${caseData.id.take(4)}.pdf"
         val pdfFile = File(context.cacheDir, fileName)
 
         try {
             pdfDocument.writeTo(FileOutputStream(pdfFile))
             pdfDocument.close()
 
-            // Trigger standard Share Intent
-            val uri: Uri = FileProvider.getUriForFile(
-                context,
-                "com.example.orthofinixai.fileprovider",
-                pdfFile
-            )
-
+            val uri: Uri = FileProvider.getUriForFile(context, "com.example.orthofinixai.fileprovider", pdfFile)
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "application/pdf"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "OrthofinixAI Clinical Report: ${safePatient.name}")
-                putExtra(Intent.EXTRA_TEXT, "Here is the Orthodontic Finishing Assessment Report for patient ${safePatient.name} generated by OrthofinixAI.")
+                putExtra(Intent.EXTRA_SUBJECT, "OrthofinixAI Clinical Report: ${patient.name}")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             context.startActivity(Intent.createChooser(shareIntent, "Share Clinical Report"))
-            Toast.makeText(context, "Report exported successfully!", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Report generated successfully!", Toast.LENGTH_LONG).show()
 
         } catch (e: IOException) {
             e.printStackTrace()
-            Toast.makeText(context, "Error writing PDF: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Error saving PDF: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 }

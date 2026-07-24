@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Upload, History, Sparkles, TrendingUp } from 'lucide-react';
+import { Upload, History, TrendingUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function DashboardPage() {
@@ -32,11 +32,6 @@ export default function DashboardPage() {
           <Upload className="text-brand-blue" size={32} />
           <h3 className="mt-4 text-xl font-bold">New Analysis</h3>
           <p className="mt-2 text-sm text-slate-500">Upload intraoral or OPG images for AI assessment</p>
-        </Link>
-        <Link to="/upload?demo=1" className="glass-card group border-2 border-brand-teal/30 p-8">
-          <Sparkles className="text-brand-teal" size={32} />
-          <h3 className="mt-4 text-xl font-bold">Try Demo</h3>
-          <p className="mt-2 text-sm text-slate-500">One-click STAR Summit showcase — works offline</p>
         </Link>
         <Link to="/history" className="glass-card p-8">
           <History className="text-brand-navy dark:text-white" size={32} />

@@ -30,6 +30,7 @@ import com.example.orthofinixai.ui.viewmodel.PatientViewModel
 import com.example.orthofinixai.ui.viewmodel.PatientState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalContext
+import com.example.orthofinixai.util.PdfGenerator
 import com.example.orthofinixai.util.ReportExporter
 import com.example.orthofinixai.ui.components.ConfidenceMeter
 
@@ -61,10 +62,16 @@ fun AssessmentSummaryScreen(
                     val patient = patientList.find { it.id == report?.case_id }
                     
                     if (report != null) {
-                        IconButton(onClick = { ReportExporter.generateAndSharePdf(context, patient, report) }) {
+                        IconButton(onClick = { 
+                            val caseData = patientViewModel.getSavedCaseForReport(report) ?: return@IconButton
+                            PdfGenerator.generateAndSharePdf(context, caseData) 
+                        }) {
                             Icon(Icons.Default.PictureAsPdf, contentDescription = "Export")
                         }
-                        IconButton(onClick = { ReportExporter.generateAndSharePdf(context, patient, report) }) {
+                        IconButton(onClick = { 
+                            val caseData = patientViewModel.getSavedCaseForReport(report) ?: return@IconButton
+                            PdfGenerator.generateAndSharePdf(context, caseData) 
+                        }) {
                             Icon(Icons.Default.Share, contentDescription = "Share")
                         }
                     }
@@ -176,18 +183,34 @@ fun AssessmentSummaryScreen(
                             
                             ClinicalMetricItem(
                                 title = "ABO OGS Scoring",
-                                value = "${report?.abo_score?.toInt() ?: 0}%",
+                                value = "${report?.abo_score?.toInt() ?: 0}% (${report?.abo_total_deductions ?: 0} deductions)",
                                 icon = Icons.Default.Analytics,
-                                status = if ((report?.abo_score ?: 0f) > 85) StatusSuccess else StatusWarning,
+                                status = if ((report?.abo_score ?: 0f) > 75) StatusSuccess else StatusWarning,
                                 onClick = { onDetails("abo") }
                             )
 
                             ClinicalMetricItem(
                                 title = "Andrews Six Keys",
-                                value = "Analysis Verified",
+                                value = "${report?.andrews_score?.toInt() ?: 0}% — ${report?.andrews_keys?.count { it.passed } ?: 0}/6 Pass",
                                 icon = Icons.Default.Key,
-                                status = StatusSuccess,
+                                status = if ((report?.andrews_score ?: 0f) > 75) StatusSuccess else StatusWarning,
                                 onClick = { onDetails("andrews") }
+                            )
+
+                            ClinicalMetricItem(
+                                title = "Roling Finishing",
+                                value = "${report?.roling_score?.toInt() ?: 0}%",
+                                icon = Icons.Default.AutoAwesome,
+                                status = if ((report?.roling_score ?: 0f) > 80) StatusSuccess else StatusWarning,
+                                onClick = { onDetails("roling") }
+                            )
+
+                            ClinicalMetricItem(
+                                title = "Raleigh-Williams Keys",
+                                value = "${report?.raleigh_williams_score?.toInt() ?: 0}%",
+                                icon = Icons.Default.Rule,
+                                status = if ((report?.raleigh_williams_score ?: 0f) > 80) StatusSuccess else StatusWarning,
+                                onClick = { onDetails("raleigh") }
                             )
 
                             ClinicalMetricItem(
@@ -209,7 +232,32 @@ fun AssessmentSummaryScreen(
                             Spacer(modifier = Modifier.height(24.dp))
                             SectionTitle("Clinical Recommendations")
 
-                            RecommendationsCard(report?.recommendations ?: emptyList())
+                            val structuredRecs = report?.structured_recommendations.orEmpty()
+                            if (structuredRecs.isNotEmpty()) {
+                                structuredRecs.take(4).forEachIndexed { index, rec ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        colors = CardDefaults.cardColors(containerColor = SurfaceClinical),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(
+                                                "${index + 1}. ${rec.discrepancyDetected}",
+                                                fontWeight = FontWeight.Bold, fontSize = 13.sp, color = BrandNavy
+                                            )
+                                            Text(rec.clinicalActionStep, fontSize = 12.sp, color = ClinicalSlate, lineHeight = 17.sp)
+                                            Text(rec.guidelineSource, fontSize = 11.sp, color = BrandGreen, modifier = Modifier.padding(top = 4.dp))
+                                        }
+                                    }
+                                }
+                                if (structuredRecs.size > 4) {
+                                    TextButton(onClick = { onDetails("recommendations") }) {
+                                        Text("View all ${structuredRecs.size} recommendations", color = BrandGreen)
+                                    }
+                                }
+                            } else {
+                                RecommendationsCard(report?.recommendations ?: emptyList())
+                            }
 
                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -226,7 +274,14 @@ fun AssessmentSummaryScreen(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             Button(
-                                onClick = { ReportExporter.generateAndSharePdf(context, patient, report) },
+                                onClick = {
+                                    report?.let { reportData ->
+                                        val caseData = patientViewModel.getSavedCaseForReport(reportData)
+                                        if (caseData != null) {
+                                            PdfGenerator.generateAndSharePdf(context, caseData)
+                                        }
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth().height(56.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = ClinicalDeepNavy)
@@ -245,7 +300,9 @@ fun AssessmentSummaryScreen(
 
 @Composable
 fun ResultHeaderCard(report: com.example.orthofinixai.data.model.AIReport?) {
-    val overallScore = report?.let { (it.abo_score + it.arch_symmetry_score + it.root_angulation_score) / 3 } ?: 0f
+    val overallScore = report?.overall_finishing_score?.takeIf { it > 0f }
+        ?: report?.let { (it.abo_score + it.arch_symmetry_score + it.root_angulation_score + it.andrews_score) / 4 }
+        ?: 0f
     
     Box(
         modifier = Modifier

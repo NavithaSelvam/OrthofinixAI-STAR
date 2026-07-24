@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://orthofinixai-backend.onrender.com';
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -26,6 +26,7 @@ export interface HistoryItem {
   confidence_score: number;
   created_at: string;
   image_url?: string;
+  user_id?: string;
 }
 
 export interface AnalysisReport {
@@ -72,13 +73,6 @@ export const analysisApi = {
     fd.append('upload_id', uploadId);
     fd.append('patient_name', patientName);
     fd.append('view_type', viewType);
-    return api.post<AnalysisReport>('/analysis/analyze', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-  analyzeDemo: () => {
-    const fd = new FormData();
-    fd.append('demo', 'true');
     return api.post<AnalysisReport>('/analysis/analyze', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });

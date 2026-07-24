@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { DEMO_REPORT } from '../lib/demo';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, setDemoUser } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -19,17 +18,10 @@ export default function LoginPage() {
       toast.success('Welcome back!');
       navigate('/dashboard');
     } catch {
-      toast.error('Login failed. Check credentials or use Demo Mode.');
+      toast.error('Login failed. Check credentials.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const tryDemo = () => {
-    setDemoUser();
-    sessionStorage.setItem('demo_report', JSON.stringify(DEMO_REPORT));
-    toast.success('Demo mode activated');
-    navigate('/dashboard');
   };
 
   return (
@@ -44,9 +36,6 @@ export default function LoginPage() {
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-        <button onClick={tryDemo} className="btn-outline mt-4 w-full border-brand-teal text-brand-teal">
-          Try Demo (STAR Summit)
-        </button>
         <p className="mt-6 text-center text-sm">
           No account? <Link to="/register" className="font-semibold text-brand-blue">Register</Link>
         </p>

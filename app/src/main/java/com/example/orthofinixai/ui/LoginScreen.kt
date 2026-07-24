@@ -61,6 +61,7 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var rememberMe by remember { mutableStateOf(true) }
     
     // Validation Errors
     var emailError by remember { mutableStateOf<String?>(null) }
@@ -180,6 +181,21 @@ fun LoginScreen(
                         fontWeight = FontWeight.Bold,
                         color = ClinicalDeepNavy
                     )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = rememberMe,
+                            onCheckedChange = { rememberMe = it },
+                            colors = CheckboxDefaults.colors(checkedColor = ClinicalSkyBlue)
+                        )
+                        Text("Remember Me", fontSize = 13.sp, color = ClinicalSlate)
+                    }
                     TextButton(onClick = onForgotPasswordClick, contentPadding = PaddingValues(0.dp)) {
                         Text("Forgot Password?", color = ClinicalSkyBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }

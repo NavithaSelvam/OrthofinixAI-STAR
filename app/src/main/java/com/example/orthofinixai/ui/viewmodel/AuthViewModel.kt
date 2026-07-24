@@ -6,10 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.orthofinixai.data.model.User
 import com.example.orthofinixai.data.repository.AuthRepository
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 sealed class AuthState {
     object Idle : AuthState()
@@ -27,14 +29,26 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     val googleSignInClient get() = repository.getGoogleSignInClient()
 
-    init { checkExistingSession() }
+    init {
+        checkExistingSession()
+    }
 
     fun checkExistingSession() {
-        val user = repository.restoreSession()
-        if (user != null) {
-            _uiState.value = AuthState.Authenticated(user)
-        } else {
-            _uiState.value = AuthState.Idle
+        val firebaseUser = FirebaseAuth.getInstance().currentUser
+        if (firebaseUser != null) {
+            viewModelScope.launch {
+                try {
+                    firebaseUser.reload().await()
+                    val user = repository.restoreSession()
+                    if (user != null) {
+                        _uiState.value = AuthState.Authenticated(user)
+                        return@launch
+                    }
+                } catch (e: Exception) {
+                    // Do not log out on network error
+                }
+                _uiState.value = AuthState.Idle
+            }
         }
     }
 
@@ -42,17 +56,26 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             repository.signInWithEmail(email, password)
-                .onSuccess { _uiState.value = AuthState.Authenticated(it) }
-                .onFailure { _uiState.value = AuthState.Error(it.message ?: "Login failed") }
+                .onSuccess { user: User ->
+                    _uiState.value = AuthState.Authenticated(user)
+                }
+                .onFailure { error: Throwable ->
+                    _uiState.value = AuthState.Error(error.message ?: "Login failed")
+                }
         }
     }
 
     fun signInWithGoogle(account: GoogleSignInAccount) {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
-            repository.signInWithGoogle(account)
-                .onSuccess { _uiState.value = AuthState.Authenticated(it) }
-                .onFailure { _uiState.value = AuthState.Error(it.message ?: "Google sign-in failed") }
+            val idToken = account.idToken.orEmpty()
+            repository.signInWithGoogle(idToken) { result: Result<User> ->
+                result.onSuccess { user: User ->
+                    _uiState.value = AuthState.Authenticated(user)
+                }.onFailure { error: Throwable ->
+                    _uiState.value = AuthState.Error(error.message ?: "Google sign-in failed")
+                }
+            }
         }
     }
 
@@ -60,10 +83,16 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = AuthState.Loading
             repository.signUpWithEmail(email, password, displayName)
-                .onSuccess { _uiState.value = AuthState.Authenticated(it) }
-                .onFailure { _uiState.value = AuthState.Error(it.message ?: "Sign up failed") }
+                .onSuccess { user: User ->
+                    _uiState.value = AuthState.Authenticated(user)
+                }
+                .onFailure { error: Throwable ->
+                    _uiState.value = AuthState.Error(error.message ?: "Sign up failed")
+                }
         }
     }
+
+
 
     fun logout() {
         repository.logout()
@@ -72,9 +101,13 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetPassword(email: String, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
-            repository.sendPasswordResetEmail(email)
-                .onSuccess { onResult(true, null) }
-                .onFailure { onResult(false, it.message ?: "Could not send reset email") }
+            repository.sendPasswordResetEmail(email) { result: Result<Unit> ->
+                result.onSuccess { _: Unit ->
+                    onResult(true, null)
+                }.onFailure { error: Throwable ->
+                    onResult(false, error.message ?: "Could not send reset email")
+                }
+            }
         }
     }
 }

@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, Download, ArrowLeft } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { analysisApi, AnalysisReport } from '../lib/api';
-import { DEMO_REPORT } from '../lib/demo';
 import { ScoreCircle } from '../components/ScoreCircle';
 
 export default function ResultsPage() {
@@ -22,15 +21,32 @@ export default function ResultsPage() {
         return;
       }
     }
-    if (id?.startsWith('demo')) {
-      setReport(DEMO_REPORT);
-      setLoading(false);
-      return;
-    }
     analysisApi
       .report(id!)
-      .then(({ data }) => setReport(data))
-      .catch(() => setReport(DEMO_REPORT))
+      .then(({ data }) => {
+        // Map backend response to frontend interface
+        const mappedReport: AnalysisReport = {
+          id: data.id,
+          patient_name: data.patient_name,
+          image_url: data.image_url,
+          view_type: data.view_type,
+          status: data.status,
+          finishing_score: data.finishing_score,
+          alignment_score: data.alignment_score,
+          confidence_score: data.confidence_score,
+          midline_deviation_mm: data.midline_deviation_mm,
+          overjet_mm: data.overjet_mm,
+          overbite_percent: data.overbite_percent,
+          abo_score: data.abo_score,
+          andrews_score: data.andrews_score,
+          prediction: data.prediction,
+          recommendations: data.recommendations,
+          metrics: data.metrics,
+          created_at: data.created_at
+        };
+        setReport(mappedReport);
+      })
+      .catch(() => setReport(null))
       .finally(() => setLoading(false));
   }, [id]);
 

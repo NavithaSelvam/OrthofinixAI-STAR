@@ -55,43 +55,13 @@ fun ABOScoringScreen(
                 .background(BackgroundClinical)
         ) {
             when (uiState) {
-                is AnalysisState.Processing -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(color = ClinicalSkyBlue, strokeWidth = 4.dp)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Retrieving ABO objective grading parameters...", color = ClinicalSlate, fontSize = 14.sp)
-                    }
-                }
-                is AnalysisState.Error -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = StatusError, modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Clinical Report Unavailable", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = ClinicalDeepNavy)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text((uiState as AnalysisState.Error).message, color = ClinicalSlate, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(
-                            onClick = onBack,
-                            colors = ButtonDefaults.buttonColors(containerColor = ClinicalDeepNavy),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Go Back", color = Color.White)
-                        }
-                    }
-                }
+                is AnalysisState.Processing -> LoadingState("Retrieving ABO objective grading parameters...")
+                is AnalysisState.Error -> ErrorState((uiState as AnalysisState.Error).message, onBack)
                 else -> {
                     val report = (uiState as? AnalysisState.Success)?.report
-                    val aboPercentage = report?.abo_score ?: 85f
-                    // Translate 0-100 percentage score to ABO Deductions (perfect score = 0 deductions)
-                    val totalDeductions = ((100f - aboPercentage) * 0.35f).toInt().coerceAtLeast(1)
+                    val categories = report?.abo_categories.orEmpty()
+                    val totalDeductions = report?.abo_total_deductions ?: 0
+                    val netScore = report?.abo_score ?: 0f
 
                     Column(
                         modifier = Modifier
@@ -99,55 +69,36 @@ fun ABOScoringScreen(
                             .padding(16.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
-                        Text(
-                            "Objective Grading System",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = ClinicalDeepNavy
-                        )
-                        Text(
-                            "Based on American Board of Orthodontics standards",
-                            color = ClinicalSlate,
-                            fontSize = 14.sp
-                        )
+                        Text("Objective Grading System", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = ClinicalDeepNavy)
+                        Text("American Board of Orthodontics — measured deductions", color = ClinicalSlate, fontSize = 14.sp)
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                        // Proportional deduction distribution
-                        val alignmentDed = if (totalDeductions > 6) -2 else 0
-                        val ridgeDed = if (totalDeductions > 2) -2 else 0
-                        val inclinationDed = if (totalDeductions > 4) -1 else 0
-                        val occlusalDed = if (totalDeductions > 8) -2 else 0
-                        val relationDed = if (totalDeductions > 10) -2 else 0
-                        val overjetDed = if (totalDeductions > 5) -1 else 0
-                        val rootDed = if ((report?.root_angulation_score ?: 85f) < 80f) -2 else 0
-
-                        ABOCategoryCard("Alignment", alignmentDed, if (alignmentDed == 0) "All teeth within 0.5mm of ideal arch form." else "Crown rotation detected on maxillary second bicuspids.")
-                        ABOCategoryCard("Marginal Ridges", ridgeDed, if (ridgeDed == 0) "Optimal marginal ridge height matching." else "Vertical step discrepancy detected in posterior quadrants.")
-                        ABOCategoryCard("Buccolingual Inclination", inclinationDed, if (inclinationDed == 0) "Optimal buccolingual inclination." else "Excessive lingual crown tilt on mandibular molars.")
-                        ABOCategoryCard("Occlusal Contacts", occlusalDed, if (occlusalDed == 0) "Optimal posterior contacts achieved." else "Minor open contacts in bicuspid segments.")
-                        ABOCategoryCard("Occlusal Relationship", relationDed, if (relationDed == 0) "Class I molar and canine relationship." else "Class II tendency detected on left molar segment.")
-                        ABOCategoryCard("Overjet", overjetDed, if (overjetDed == 0) "Optimal overjet within 1.5mm." else "Slight anterior overjet expansion detected.")
-                        ABOCategoryCard("Interproximal Contacts", 0, "All contacts securely closed.")
-                        ABOCategoryCard("Root Angulation", rootDed, if (rootDed == 0) "Excellent root parallelism on panoramic view." else "Distal root tip error detected on maxillary canine segment.")
-
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (totalDeductions < 8) Color(0xFFD1FAE5) else Color(0xFFFEE2E2)),
-                            colors = CardDefaults.cardColors(containerColor = if (totalDeductions < 8) Color(0xFFECFDF5) else Color(0xFFFEF2F2))
+                            colors = CardDefaults.cardColors(containerColor = ClinicalDeepNavy),
+                            shape = RoundedCornerShape(16.dp)
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = "Total Deductions: $totalDeductions points", 
-                                    fontWeight = FontWeight.Bold, 
-                                    color = if (totalDeductions < 8) Color(0xFF047857) else Color(0xFF991B1B)
-                                )
-                                Text(
-                                    text = "A score under 20 is required for passing the ABO clinical board examination.", 
-                                    fontSize = 12.sp, 
-                                    color = if (totalDeductions < 8) Color(0xFF065F46) else Color(0xFF991B1B)
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Text("Net ABO Score", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                                Text("${netScore.toInt()}%", fontSize = 42.sp, fontWeight = FontWeight.Black, color = Color.White)
+                                Text("Total deductions: $totalDeductions pts", color = ClinicalSkyBlue, fontSize = 14.sp)
+                                Text(report?.abo_finishing_grade ?: "", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        if (categories.isEmpty()) {
+                            Text("No ABO category data available.", color = ClinicalSlate)
+                        } else {
+                            categories.forEach { cat ->
+                                AboCategoryCard(
+                                    name = cat.category,
+                                    deduction = cat.deduction,
+                                    summary = cat.measurementSummary,
+                                    explanation = cat.explanation,
+                                    teeth = cat.affectedTeeth
                                 )
                             }
                         }
@@ -159,15 +110,22 @@ fun ABOScoringScreen(
 }
 
 @Composable
-fun ABOCategoryCard(title: String, score: Int, feedback: String) {
+private fun AboCategoryCard(
+    name: String,
+    deduction: Int,
+    summary: String,
+    explanation: String,
+    teeth: List<Int>
+) {
+    val color = when (deduction) {
+        0 -> StatusSuccess
+        -1 -> StatusWarning
+        else -> StatusError
+    }
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         colors = CardDefaults.cardColors(containerColor = SurfaceClinical),
-        border = androidx.compose.foundation.BorderStroke(1.dp, BorderClinical),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -175,22 +133,56 @@ fun ABOCategoryCard(title: String, score: Int, feedback: String) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = ClinicalDeepNavy)
-                val scoreColor = if (score == 0) ClinicalEmerald else Color(0xFFEF4444)
+                Text(name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = ClinicalDeepNavy)
                 Text(
-                    text = if (score == 0) "Optimal" else "$score pts",
-                    color = scoreColor,
-                    fontWeight = FontWeight.Bold
+                    if (deduction == 0) "0" else deduction.toString(),
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,
+                    color = color
                 )
             }
-            if (score != 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(feedback, fontSize = 14.sp, color = ClinicalSlate)
-                }
+            Text(summary, fontSize = 13.sp, color = ClinicalSlate, modifier = Modifier.padding(top = 4.dp))
+            Text(explanation, fontSize = 13.sp, color = Color.Black, modifier = Modifier.padding(top = 6.dp))
+            if (teeth.isNotEmpty()) {
+                Text(
+                    "Affected teeth (FDI): ${teeth.joinToString(", ")}",
+                    fontSize = 12.sp,
+                    color = ClinicalSkyBlue,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun LoadingState(message: String) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator(color = ClinicalSkyBlue, strokeWidth = 4.dp)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(message, color = ClinicalSlate, fontSize = 14.sp)
+    }
+}
+
+@Composable
+private fun ErrorState(message: String, onBack: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(Icons.Default.Warning, contentDescription = null, tint = StatusError, modifier = Modifier.size(48.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Clinical Report Unavailable", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = ClinicalDeepNavy)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(message, color = ClinicalSlate, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = ClinicalDeepNavy)) {
+            Text("Go Back", color = Color.White)
         }
     }
 }

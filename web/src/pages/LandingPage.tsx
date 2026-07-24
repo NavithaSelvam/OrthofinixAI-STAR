@@ -39,7 +39,7 @@ export default function LandingPage() {
               Start Free <ArrowRight size={18} />
             </Link>
             <Link to="/login" className="inline-flex items-center gap-2 rounded-xl border-2 border-white/40 px-8 py-4 font-bold hover:bg-white/10">
-              Try Demo
+              Sign In
             </Link>
           </div>
         </motion.div>
@@ -48,7 +48,7 @@ export default function LandingPage() {
           {[
             { icon: Zap, title: 'Real-time AI', desc: 'Landmark detection & clinical rule engine' },
             { icon: Shield, title: 'Explainable', desc: 'FDI tooth numbers, mm, degrees, severity' },
-            { icon: Sparkles, title: 'Demo Ready', desc: 'One-click showcase for live presentations' },
+            { icon: Sparkles, title: 'Clinical Accuracy', desc: 'ABO/Raleigh Williams rules-based scoring' },
           ].map(({ icon: Icon, title, desc }, i) => (
             <motion.div
               key={title}

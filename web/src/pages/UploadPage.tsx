@@ -1,8 +1,7 @@
-import { useCallback, useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { analysisApi } from '../lib/api';
-import { DEMO_REPORT } from '../lib/demo';
 import { AIProcessingOverlay } from '../components/AIProcessingOverlay';
 
 // Simple dropzone without extra package - use native
@@ -26,12 +25,6 @@ export default function UploadPage() {
   const [processing, setProcessing] = useState(false);
   const [stage, setStage] = useState(0);
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const isDemo = params.get('demo') === '1';
-
-  useEffect(() => {
-    if (isDemo) runDemo();
-  }, [isDemo]);
 
   const onFile = (f: File) => {
     setFile(f);
@@ -40,26 +33,8 @@ export default function UploadPage() {
 
   const onDragOver = useFileDrop(onFile);
 
-  const runDemo = async () => {
-    setProcessing(true);
-    for (let i = 0; i < 5; i++) {
-      setStage(i);
-      await new Promise((r) => setTimeout(r, 600));
-    }
-    try {
-      const { data } = await analysisApi.analyzeDemo();
-      sessionStorage.setItem('last_report', JSON.stringify(data));
-      navigate(`/results/${data.id}`);
-    } catch {
-      sessionStorage.setItem('last_report', JSON.stringify(DEMO_REPORT));
-      navigate(`/results/${DEMO_REPORT.id}`);
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   const runAnalysis = async () => {
-    if (!file && !isDemo) {
+    if (!file) {
       toast.error('Please upload an image');
       return;
     }
@@ -77,10 +52,9 @@ export default function UploadPage() {
       sessionStorage.setItem('last_report', JSON.stringify(report));
       toast.success('Analysis complete!');
       navigate(`/results/${report.id}`);
-    } catch {
-      toast.error('Backend unavailable — using demo report');
-      sessionStorage.setItem('last_report', JSON.stringify(DEMO_REPORT));
-      navigate(`/results/${DEMO_REPORT.id}`);
+    } catch (error) {
+      toast.error('Analysis failed. Please try again.');
+      console.error('Analysis error:', error);
     } finally {
       setProcessing(false);
     }
@@ -115,14 +89,9 @@ export default function UploadPage() {
           <option value="lateral">Lateral View</option>
           <option value="opg">OPG Radiograph</option>
         </select>
-        <div className="flex gap-3">
-          <button onClick={runAnalysis} className="btn-primary flex-1" disabled={processing}>
-            Run AI Analysis
-          </button>
-          <button onClick={runDemo} className="btn-outline flex-1" disabled={processing}>
-            Try Demo
-          </button>
-        </div>
+        <button onClick={runAnalysis} className="btn-primary w-full" disabled={processing}>
+          Run AI Analysis
+        </button>
       </div>
     </div>
   );

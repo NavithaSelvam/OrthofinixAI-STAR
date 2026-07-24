@@ -1,6 +1,6 @@
 package com.example.orthofinixai.ui.navigation
 
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -8,7 +8,6 @@ import androidx.navigation.compose.composable
 import com.example.orthofinixai.ui.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.orthofinixai.ui.viewmodel.*
-import androidx.compose.runtime.remember
 
 private fun NavHostController.navigateMainTab(route: String) {
     navigate(route) {
@@ -69,24 +68,19 @@ fun OrthofinixNavGraph(
         }
         composable(Screen.SignUp.route) {
             SignUpScreen(
-                onSignUpClick = { navController.navigate(Screen.Verification.route) },
+                onSignUpClick = { 
+                    navController.navigate(Screen.Dashboard.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                },
                 onSignInClick = { navController.navigate(Screen.Login.route) },
                 viewModel = authViewModel
             )
         }
         composable(Screen.ForgotPassword.route) {
-            ForgotPasswordScreen(onBack = { navController.popBackStack() })
+            ForgotPasswordScreen(onBack = { navController.popBackStack() }, viewModel = authViewModel)
         }
-        composable(Screen.Verification.route) {
-            VerificationScreen(
-                onBack = { navController.popBackStack() },
-                onVerify = { 
-                    navController.navigate(Screen.Dashboard.route) {
-                        popUpTo(Screen.Login.route) { inclusive = true }
-                    }
-                }
-            )
-        }
+
         composable(Screen.Dashboard.route) {
             DashboardScreen(
                 onAddCaseClick = { 
@@ -184,6 +178,8 @@ fun OrthofinixNavGraph(
                         "andrews" -> Screen.AndrewsKeys.route
                         "symmetry" -> Screen.ArchSymmetry.route
                         "roots" -> Screen.RootAngulation.route
+                        "roling" -> Screen.RolingConcepts.route
+                        "raleigh" -> Screen.RaleighWilliams.route
                         "recommendations" -> Screen.Recommendations.route
                         else -> Screen.Dashboard.route
                     }
@@ -243,7 +239,9 @@ fun OrthofinixNavGraph(
             SubscriptionScreen(onBack = { navController.popBackStack() }) 
         }
         composable(Screen.ExportReport.route) { 
-            ExportReportScreen(onBack = { navController.popBackStack() }) 
+            val uiState by analysisViewModel.uiState.collectAsState()
+            val caseId = (uiState as? AnalysisState.Success)?.report?.case_id ?: ""
+            ExportReportScreen(caseId = caseId, onBack = { navController.popBackStack() })
         }
         composable(Screen.HelpSupport.route) { 
             HelpSupportScreen(onBack = { navController.popBackStack() }) 

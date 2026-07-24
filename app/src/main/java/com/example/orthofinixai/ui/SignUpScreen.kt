@@ -46,19 +46,32 @@ fun SignUpScreen(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var termsAccepted by remember { mutableStateOf(false) }
     
     // Validation Errors
     var nameError by remember { mutableStateOf<String?>(null) }
     var emailError by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
     var confirmError by remember { mutableStateOf<String?>(null) }
+    var termsError by remember { mutableStateOf<String?>(null) }
 
     fun validate(): Boolean {
         var isValid = true
         if (fullName.isBlank()) { nameError = "Name is required"; isValid = false } else nameError = null
-        if (email.isBlank()) { emailError = "Email is required"; isValid = false } else emailError = null
-        if (password.length < 6) { passwordError = "Password must be at least 6 characters"; isValid = false } else passwordError = null
+        
+        val emailRegex = "^[A-Za-z](.*)([@]{1})(.{1,})(\\.)(.{1,})".toRegex()
+        if (email.isBlank() || !emailRegex.matches(email)) { emailError = "Valid email is required"; isValid = false } else emailError = null
+        
+        val passwordRegex = "^(?=.*[0-9])(?=.*[a-zA-Z]).{6,}\$".toRegex()
+        if (!passwordRegex.matches(password)) { 
+            passwordError = "Password must be 6+ chars with letters and numbers"
+            isValid = false 
+        } else passwordError = null
+        
         if (password != confirmPassword) { confirmError = "Passwords do not match"; isValid = false } else confirmError = null
+        
+        if (!termsAccepted) { termsError = "You must accept the terms"; isValid = false } else termsError = null
+        
         return isValid
     }
 
@@ -159,15 +172,33 @@ fun SignUpScreen(
                     error = confirmError
                 )
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = termsAccepted,
+                        onCheckedChange = { termsAccepted = it; termsError = null },
+                        colors = CheckboxDefaults.colors(checkedColor = PrimaryGreen)
+                    )
+                    Text("I accept the Terms and Conditions", fontSize = 14.sp, color = TextGray)
+                }
+                if (termsError != null) {
+                    Text(termsError!!, color = Color.Red, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp))
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
-                if (uiState is AuthState.Error) {
-                    Text(
-                        (uiState as AuthState.Error).message,
-                        color = Color.Red,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                // Error / Info message display
+                when (val state = uiState) {
+                    is AuthState.Error -> {
+                        Text(
+                            state.message,
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    else -> {}
                 }
 
                 Button(

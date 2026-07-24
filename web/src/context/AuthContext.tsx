@@ -7,7 +7,6 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
-  setDemoUser: () => void;
   loading: boolean;
 }
 
@@ -52,13 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const setDemoUser = () => {
-    const demo: User = { id: 'demo', email: 'demo@orthofinix.ai', display_name: 'Demo Clinician' };
-    persist('demo-token', demo);
-  };
-
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, setDemoUser, loading }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -39,11 +39,19 @@ class PatientViewModel(application: Application) : AndroidViewModel(application)
                         Patient(
                             id = c.id,
                             name = c.patientName,
-                            date_of_birth = "",
+                            age = 0,
+                            dateOfBirth = "",
                             gender = "",
-                            contact_info = c.viewType,
-                            created_at = java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.US)
-                                .format(java.util.Date(c.createdAt))
+                            phone = "",
+                            email = "",
+                            doctorName = c.doctorName,
+                            hospital = "",
+                            diagnosis = "",
+                            treatmentDate = "",
+                            notes = "",
+                            imageUrls = emptyList(),
+                            doctorId = "",
+                            createdAt = c.createdAt
                         )
                     }
                     _uiState.value = PatientState.Success(patients, cases)
@@ -51,12 +59,49 @@ class PatientViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun addPatient(name: String, dob: String, gender: String, contact: String? = null, onSuccess: (String) -> Unit = {}) {
+    fun addPatient(
+        name: String, dob: String, gender: String, phone: String = "", 
+        email: String = "", doctorName: String = "", hospital: String = "", 
+        diagnosis: String = "", treatmentDate: String = "", notes: String = "", 
+        onSuccess: (String) -> Unit = {}
+    ) {
         viewModelScope.launch {
-            patientRepository.createPatient(PatientCreate(name, dob, gender, contact)).collect { created ->
-                fetchPatients()
-                onSuccess(created.id ?: "case_${System.currentTimeMillis()}")
+            patientRepository.createPatient(
+                PatientCreate(
+                    name = name,
+                    dateOfBirth = dob,
+                    gender = gender,
+                    phone = phone,
+                    email = email,
+                    doctorName = doctorName,
+                    hospital = hospital,
+                    diagnosis = diagnosis,
+                    treatmentDate = treatmentDate,
+                    notes = notes
+                )
+            ).collect { result ->
+                result.onSuccess { patient ->
+                    onSuccess(patient.id)
+                    fetchPatients()
+                }.onFailure { error ->
+                    _uiState.value = PatientState.Error(error.message ?: "Failed to create patient")
+                }
             }
         }
+    }
+
+    fun deleteCase(caseId: String) {
+        viewModelScope.launch {
+            caseRepository.deleteCase(caseId)
+            fetchPatients()
+        }
+    }
+
+    fun getSavedCaseForReport(report: com.example.orthofinixai.data.model.AIReport): com.example.orthofinixai.data.model.SavedCase? {
+        val state = uiState.value
+        if (state is PatientState.Success) {
+            return state.savedCases.find { it.id == report.case_id }
+        }
+        return null
     }
 }

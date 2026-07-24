@@ -35,6 +35,9 @@ import com.example.orthofinixai.ui.viewmodel.AuthState
 import androidx.compose.ui.text.style.TextAlign
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import com.example.orthofinixai.data.model.SavedCase
+import com.example.orthofinixai.data.model.ClinicalReport
+import com.example.orthofinixai.util.PdfGenerator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -219,7 +222,7 @@ fun DashboardScreen(
                             EmptyDashboardState(onDemoClick = onDemoClick)
                         } else {
                             cases.take(5).forEach { c ->
-                                ClinicalCaseItem(c.patientName, c.id, onCaseClick)
+                                ClinicalCaseItem(c, onCaseClick, context)
                                 Spacer(modifier = Modifier.height(12.dp))
                             }
                         }
@@ -254,32 +257,98 @@ fun QuickStatCard(
     }
 }
 
+
 @Composable
-fun ClinicalCaseItem(name: String, id: String, onClick: (String) -> Unit) {
+fun ClinicalCaseItem(case: SavedCase, onClick: (String) -> Unit, context: android.content.Context) {
+    val clinicalData = try {
+        if (case.clinicalDataJson.isNotEmpty()) ClinicalReport.fromJson(case.clinicalDataJson) else null
+    } catch (e: Exception) { null }
+
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick(id) },
+        modifier = Modifier.fillMaxWidth().clickable { onClick(case.id) },
         colors = CardDefaults.cardColors(containerColor = SurfaceClinical),
         border = androidx.compose.foundation.BorderStroke(1.dp, BorderClinical),
         shape = RoundedCornerShape(12.dp)
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(BackgroundClinical),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Assignment, null, tint = ClinicalDeepNavy)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Thumbnail
+                Box(
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)).background(BackgroundClinical),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (case.imagePath.isNotEmpty()) {
+                        // In a real app we'd load image with Coil, here we just show placeholder
+                        Icon(Icons.Default.Person, null, tint = ClinicalDeepNavy, modifier = Modifier.size(32.dp))
+                    } else {
+                        Icon(Icons.Default.Assignment, null, tint = ClinicalDeepNavy, modifier = Modifier.size(32.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(case.patientName, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = ClinicalDeepNavy)
+                    Text("Patient ID: ${case.patientId}", fontSize = 12.sp, color = ClinicalSlate)
+                    if (clinicalData != null) {
+                        val overall = (clinicalData.aboScore + clinicalData.andrewsScore) / 2
+                        Text("Overall Score: ${overall.toInt()}%", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = ClinicalEmerald)
+                    }
+                }
+                Box(
+                    modifier = Modifier.clip(CircleShape).background(ClinicalEmerald.copy(alpha = 0.1f)).padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Text("ANALYZED", color = ClinicalEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = ClinicalDeepNavy)
-                Text("Case #$id", fontSize = 12.sp, color = ClinicalSlate)
+
+            if (clinicalData != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = BorderClinical)
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Scores Row
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    ScoreBadge("ABO", "${clinicalData.aboScore.toInt()}")
+                    ScoreBadge("Andrews", "${clinicalData.andrewsScore.toInt()}")
+                    ScoreBadge("Roling", clinicalData.rolingResult?.overallScore?.toInt()?.toString() ?: "N/A")
+                    ScoreBadge("Raleigh", clinicalData.raleighWilliamsResult?.overallScore?.toInt()?.toString() ?: "N/A")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Measurements:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ClinicalDeepNavy)
+                Text("Overjet: ${clinicalData.overjetMm}mm | Overbite: ${clinicalData.overbitePercent}% | Symmetry: ${clinicalData.archSymmetryScore}%", fontSize = 12.sp, color = ClinicalSlate)
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Top Recommendation:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ClinicalDeepNavy)
+                val rec = clinicalData.recommendations.firstOrNull() ?: clinicalData.structuredRecommendations.firstOrNull()?.clinicalActionStep ?: "No recommendations"
+                Text(rec, fontSize = 12.sp, color = ClinicalSlate, maxLines = 1)
             }
-            Box(
-                modifier = Modifier.clip(CircleShape).background(ClinicalEmerald.copy(alpha = 0.1f)).padding(horizontal = 12.dp, vertical = 4.dp)
-            ) {
-                Text("ANALYZED", color = ClinicalEmerald, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = BorderClinical)
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Buttons Row
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = { onClick(case.id) }) {
+                    Text("View Report", color = ClinicalSkyBlue, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = { PdfGenerator.generateAndSharePdf(context, case) }) {
+                    Icon(Icons.Default.Share, contentDescription = "Share PDF", tint = ClinicalSkyBlue)
+                }
+                IconButton(onClick = { PdfGenerator.generateAndSharePdf(context, case) }) {
+                    Icon(Icons.Default.PictureAsPdf, contentDescription = "Download PDF", tint = ClinicalDeepNavy)
+                }
             }
         }
+    }
+}
+
+@Composable
+fun ScoreBadge(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = ClinicalDeepNavy)
+        Text(label, fontSize = 10.sp, color = ClinicalSlate)
     }
 }
 

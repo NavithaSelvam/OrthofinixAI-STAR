@@ -1,38 +1,15 @@
-import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "orthofinix-summit-demo-secret-change-in-production")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))
-
+# This file previously contained local JWT authentication logic using python-jose.
+# It has been deprecated as the backend has completely migrated to Firebase Authentication.
+# Local JWT generation, SECRET_KEY, and hash validation have been removed.
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
+    raise NotImplementedError("Local password hashing is deprecated. Use Firebase Auth.")
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
+    raise NotImplementedError("Local password verification is deprecated. Use Firebase Auth.")
 
 def create_access_token(subject: str, email: str, name: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {
-        "sub": subject,
-        "email": email,
-        "name": name,
-        "exp": expire,
-    }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    raise NotImplementedError("Local JWT generation is deprecated. Tokens are managed by Firebase Auth.")
 
-
-def decode_token(token: str) -> Optional[dict]:
-    try:
-        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
-        return None
+def decode_token(token: str) -> dict:
+    raise NotImplementedError("Local JWT decoding is deprecated. Use firebase_admin.auth.verify_id_token.")

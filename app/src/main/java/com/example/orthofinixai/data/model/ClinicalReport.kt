@@ -27,10 +27,28 @@ data class ClinicalReport(
     val curveOfSpeeMm: Float = 0f,
     val supplementalFindings: List<SupplementalFinding> = emptyList(),
     val landmarkOverlay: Map<String, LandmarkPoint> = emptyMap(),
+    val toothLandmarks: Map<Int, ToothLandmarks> = emptyMap(),
     val detectedTeethFdi: List<Int> = emptyList(),
-    val generatedAt: Long = System.currentTimeMillis()
+    val generatedAt: Long = System.currentTimeMillis(),
+    val aboOgsResult: AboOgsResult? = null,
+    val andrewsKeyEvaluations: List<AndrewsKeyEvaluation> = emptyList(),
+    val rolingResult: RolingFinishingResult? = null,
+    val raleighWilliamsResult: RaleighWilliamsResult? = null,
+    val structuredRecommendations: List<ClinicalRecommendation> = emptyList()
 ) {
     data class LandmarkPoint(val x: Float, val y: Float)
+
+    data class ToothLandmarks(
+        val fdi: Int,
+        val incisalEdge: LandmarkPoint,
+        val longAxisApex: LandmarkPoint,
+        val longAxisIncisal: LandmarkPoint,
+        val contactMesial: LandmarkPoint,
+        val contactDistal: LandmarkPoint,
+        val center: LandmarkPoint,
+        val occlusalSurface: LandmarkPoint?
+    )
+
     data class SupplementalFinding(
         val category: String,
         val toothFdi: Int? = null,
