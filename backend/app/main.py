@@ -12,8 +12,6 @@ from app.api.routes import (
     cases,
     ai,
     analysis,
-    summit_auth,
-    summit_analysis,
 )
 
 # Initialize services
@@ -29,7 +27,12 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://orthofinixai-backend.onrender.com", "*"],  # Allowed origins
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://orthofinixai.web.app",
+        "https://orthofinixai.firebaseapp.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,31 +45,27 @@ os.makedirs("uploads", exist_ok=True)
 # Static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# --------------------------
-# Include Routers
-# --------------------------
+
 
 app.include_router(auth.router, tags=["Auth"])
-app.include_router(patients.router, tags=["Patients"])
+app.include_router(patients.router, prefix="/patients", tags=["Patients"])
+app.include_router(analysis.router, tags=["Analysis"])
 app.include_router(cases.router, tags=["Cases"])
 app.include_router(ai.router, tags=["AI"])
-app.include_router(analysis.router, tags=["Analysis"])
 
-# Summit Routes
-app.include_router(summit_auth.router, tags=["Summit Auth"])
-app.include_router(
-    summit_analysis.router,
-    prefix="/analysis",
-    tags=["Summit Analysis"]
-)
-
-# Root endpoint
+# Root endpoint (Health Check)
 @app.get("/")
-def root():
-    return {
-        "message": "Welcome to the OrthofinixAi Backend",
-        "status": "active",
-    }
+def health_check():
+    return {"status": "ok"}
+
+@app.get("/ping")
+def ping():
+    return {"ping": "pong"}
+
+@app.get("/warmup")
+def warmup():
+    """Lightweight endpoint to wake up Render free tier before analysis."""
+    return {"status": "warm"}
 
 
 if __name__ == "__main__":
