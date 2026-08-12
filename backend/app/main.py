@@ -47,6 +47,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 
+# Include routers (order matters for path parameters)
 app.include_router(auth.router, tags=["Auth"])
 app.include_router(patients.router, prefix="/patients", tags=["Patients"])
 app.include_router(analysis.router, tags=["Analysis"])
